@@ -1,0 +1,63 @@
+services:
+  # 1. MongoDB Database
+  mongo:
+    image: mongo:7.0
+    container_name: itsm-mongodb
+    restart: always
+    ports:
+      - "27019:27017"
+    environment:
+      MONGO_INITDB_DATABASE: itsm_db
+    volumes:
+      - mongo_data:/data/db
+
+  # 2. Mongo Express - MongoDB Management UI
+  mongo-express:
+    image: mongo-express:latest
+    container_name: itsm-mongo-express
+    restart: always
+    ports:
+      - "8085:8081"
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: pass
+    depends_on:
+      - mongo
+
+  # 3. Backend - Node.js / Express
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: itsm-backend
+    restart: always
+    ports:
+      - "5005:5000"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/itsm_db
+      PORT: 5000
+    depends_on:
+      - mongo
+
+  # 4. Frontend - React / Vite / Nginx
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: itsm-frontend
+    restart: always
+    ports:
+      - "3005:80"
+    depends_on:
+      - backend
+
+# IMPORTANT:
+# Reuse the existing MongoDB data volume.
+# This prevents loss of your existing ITSM database.
+volumes:
+  mongo_data:
+    external: true
+    name: nexus-it-ops-final_mongo_data
