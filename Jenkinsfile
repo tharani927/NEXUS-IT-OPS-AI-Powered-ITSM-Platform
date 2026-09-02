@@ -14,7 +14,7 @@ pipeline {
 
         stage('Checkout Verification') {
             steps {
-                sh 'echo "Checking out NEXUS source code..."'
+                sh 'echo "Verifying NEXUS source code..."'
                 sh 'ls -la'
                 sh 'test -f docker-compose.yml'
                 sh 'test -f backend/Dockerfile'
@@ -41,15 +41,43 @@ pipeline {
             }
         }
 
-        stage('Deployment') {
+        stage('Prepare Deployment Network') {
             steps {
-                sh 'docker compose up -d'
+                sh '''
+                    docker network inspect nexus-it-ops-cicd_default >/dev/null 2>&1 || \
+                    docker network create nexus-it-ops-cicd_default
+
+                    docker network connect \
+                      --alias mongo \
+                      nexus-it-ops-cicd_default \
+                      itsm-mongodb 2>/dev/null || true
+                '''
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                sh '''
+                    docker rm -f itsm-backend 2>/dev/null || true
+                    docker rm -f itsm-frontend 2>/dev/null || true
+
+                    docker compose up -d --no-deps backend frontend
+                '''
             }
         }
 
         stage('Deployment Verification') {
             steps {
-                sh 'docker ps'
+                sh '''
+                    echo "=== Running NEXUS Containers ==="
+                    docker ps --filter "name=itsm-"
+                '''
+
+                sh '''
+                    echo "=== Backend Health Check ==="
+                    sleep 5
+                    docker exec itsm-backend wget -qO- http://localhost:5000/health || exit 1
+                '''
             }
         }
     }
